@@ -1,0 +1,47 @@
+name: Upload IPA to TestFlight
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: HTTPS URL to download IPA (can be a signed OSS URL)
+        required: true
+        type: string
+
+jobs:
+  upload:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install fastlane
+        run: gem install fastlane -N
+
+      - name: Download IPA
+        run: |
+          set -euo pipefail
+          curl -fL "${{ inputs.ipa_url }}" -o app.ipa
+          ls -lh app.ipa
+
+      - name: Write App Store Connect API Key
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p asc
+          python3 - <<'PY'
+          import json, os
+          payload = {
+            "key_id": os.environ["ASC_KEY_ID"],
+            "issuer_id": os.environ["ASC_ISSUER_ID"],
+            "key": os.environ["ASC_PRIVATE_KEY"],
+            "in_house": False,
+          }
+          with open("asc/api_key.json", "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+          PY
+
+      - name: Upload to TestFlight
+        run: fastlane run pilot upload ipa:"app.ipa" api_key_path:"asc/api_key.json" skip_waiting_for_build_processing:true
