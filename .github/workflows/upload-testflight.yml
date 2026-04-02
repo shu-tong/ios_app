@@ -18,10 +18,18 @@ jobs:
         run: gem install fastlane -N
 
       - name: Download IPA (supports zip-with-ipa or renamed-ipa-as-zip)
+        env:
+          URL_RAW: ${{ inputs.ipa_url }}
         run: |
           set -euo pipefail
 
-          curl -fL "${{ inputs.ipa_url }}" -o package.bin
+          URL="$(python3 - <<'PY'
+          import os
+          print(os.environ["URL_RAW"].strip().replace("\r", "").replace("\n", ""))
+          PY
+          )"
+
+          curl -fL "$URL" -o package.bin
           file package.bin || true
 
           if unzip -l package.bin >/dev/null 2>&1; then
