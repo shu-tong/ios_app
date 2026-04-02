@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       ipa_url:
-        description: HTTPS URL to download IPA (can be a signed OSS URL)
+        description: HTTPS URL to download IPA/ZIP (can be a signed OSS URL)
         required: true
         type: string
 
@@ -17,10 +17,28 @@ jobs:
       - name: Install fastlane
         run: gem install fastlane -N
 
-      - name: Download IPA
+      - name: Download IPA (supports zip-with-ipa or renamed-ipa-as-zip)
         run: |
           set -euo pipefail
-          curl -fL "${{ inputs.ipa_url }}" -o app.ipa
+
+          curl -fL "${{ inputs.ipa_url }}" -o package.bin
+          file package.bin || true
+
+          if unzip -l package.bin >/dev/null 2>&1; then
+            unzip -l package.bin
+            rm -rf extracted
+            mkdir -p extracted
+            unzip -q package.bin -d extracted
+            IPA_PATH="$(find extracted -name '*.ipa' -print -quit)"
+            if [ -z "$IPA_PATH" ]; then
+              echo "No .ipa found inside the zip"
+              exit 1
+            fi
+            mv "$IPA_PATH" app.ipa
+          else
+            mv package.bin app.ipa
+          fi
+
           ls -lh app.ipa
 
       - name: Write App Store Connect API Key
